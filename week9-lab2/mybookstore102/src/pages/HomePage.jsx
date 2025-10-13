@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRightIcon, BookOpenIcon, TruckIcon, ShieldCheckIcon } from '@heroicons/react/outline';
+import FeaturedBooks from '../components/FeaturedBooks';
 import BookCard from '../components/BookCard';
 
 const HomePage = () => {
