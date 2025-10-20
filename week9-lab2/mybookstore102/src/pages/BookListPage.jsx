@@ -3,7 +3,6 @@ import BookCard from '../components/BookCard';
 import SearchBar from '../components/SearchBar';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { ChevronDownIcon } from '@heroicons/react/outline';
-import { getAllBooks } from '../data/booksData';
 
 const BookListPage = () => {
   const [books, setBooks] = useState([]);
@@ -13,25 +12,47 @@ const BookListPage = () => {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const booksPerPage = 12;
-  
+  const [error, setError] = useState(null);
+
   const categories = [
-    'all', 'fiction', 'non-fiction', 'science', 'history', 'art', 
+    'all', 'fiction', 'non-fiction', 'science', 'history', 'art',
     'psychology', 'business', 'technology', 'cooking'
   ];
 
   useEffect(() => {
-    // Load books from data
-    setLoading(true);
-    setTimeout(() => {
-      const booksData = getAllBooks();
-      setBooks(booksData);
-      setFilteredBooks(booksData);
-      setLoading(false);
-    }, 1000);
+    const fetchBooks = async () => {
+      try {
+        setLoading(true);
+
+        // ✅ ใช้ .env หรือ fallback เป็น localhos
+
+        // ✅ ดึงข้อมูลจาก backend จริง (Go + PostgreSQL)
+        const response = await fetch('http://localhost:8080/api/v1/books');
+        if (!response.ok) {
+          throw new Error('Failed to fetch books');
+        }
+
+        const data = await response.json();
+
+        // ✅ เก็บข้อมูลทั้งหมด
+        setBooks(data);
+        setFilteredBooks(data);
+        setError(null);
+
+      } catch (err) {
+        setError(err.message);
+        console.error('Error fetching books:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBooks();
   }, []);
 
+  // 🔍 Search
   const handleSearch = (searchTerm) => {
-    const filtered = books.filter(book => 
+    const filtered = books.filter(book =>
       book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       book.author.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -39,19 +60,21 @@ const BookListPage = () => {
     setCurrentPage(1);
   };
 
+  // 🔖 Category Filter
   const handleCategoryFilter = (category) => {
     setSelectedCategory(category);
     if (category === 'all') {
       setFilteredBooks(books);
     } else {
-      const filtered = books.filter(book => 
-        book.category.toLowerCase() === category.toLowerCase()
+      const filtered = books.filter(book =>
+        (book.category || '').toLowerCase() === category.toLowerCase()
       );
       setFilteredBooks(filtered);
     }
     setCurrentPage(1);
   };
 
+  // 🔄 Sorting
   const handleSort = (sortValue) => {
     setSortBy(sortValue);
     const sorted = [...filteredBooks];
@@ -63,26 +86,23 @@ const BookListPage = () => {
         sorted.sort((a, b) => b.price - a.price);
         break;
       case 'popular':
-        sorted.sort((a, b) => b.reviews - a.reviews);
+        sorted.sort((a, b) => (b.reviews || 0) - (a.reviews || 0));
         break;
-      case 'newest':
       default:
         sorted.sort((a, b) => b.id - a.id);
     }
     setFilteredBooks(sorted);
   };
 
-  // Pagination logic
+  // 🔢 Pagination logic
   const indexOfLastBook = currentPage * booksPerPage;
   const indexOfFirstBook = indexOfLastBook - booksPerPage;
   const currentBooks = filteredBooks.slice(indexOfFirstBook, indexOfLastBook);
   const totalPages = Math.ceil(filteredBooks.length / booksPerPage);
-
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
-  if (loading) {
-    return <LoadingSpinner />;
-  }
+  if (loading) return <LoadingSpinner />;
+  if (error) return <p className="text-center text-red-600 mt-10">เกิดข้อผิดพลาด: {error}</p>;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -92,36 +112,28 @@ const BookListPage = () => {
           <h1 className="text-4xl font-bold text-gray-900 mb-4">หนังสือทั้งหมด</h1>
           <p className="text-gray-600">ค้นพบหนังสือที่คุณชื่นชอบจากคอลเล็กชันของเรา</p>
         </div>
-        
-        {/* Filters and Search */}
+
+        {/* Filters & Search */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
           <div className="flex flex-col lg:flex-row gap-4">
-            {/* Search */}
             <div className="flex-1">
               <SearchBar onSearch={handleSearch} />
             </div>
-            
-            {/* Category Filter */}
-            <select 
+
+            {/* Category */}
+            <select
               className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none 
                 focus:ring-2 focus:ring-viridian-500 cursor-pointer"
               value={selectedCategory}
               onChange={(e) => handleCategoryFilter(e.target.value)}
             >
-              <option value="all">ทุกหมวดหมู่</option>
-              <option value="fiction">นิยาย</option>
-              <option value="non-fiction">สารคดี</option>
-              <option value="science">วิทยาศาสตร์</option>
-              <option value="history">ประวัติศาสตร์</option>
-              <option value="art">ศิลปะ</option>
-              <option value="psychology">จิตวิทยา</option>
-              <option value="business">ธุรกิจ</option>
-              <option value="technology">เทคโนโลยี</option>
-              <option value="cooking">อาหาร</option>
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
             </select>
-            
+
             {/* Sort */}
-            <select 
+            <select
               className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none 
                 focus:ring-2 focus:ring-viridian-500 cursor-pointer"
               value={sortBy}
@@ -133,15 +145,14 @@ const BookListPage = () => {
               <option value="popular">ยอดนิยม</option>
             </select>
           </div>
-          
-          {/* Results count */}
+
           <div className="mt-4 text-sm text-gray-600">
             พบหนังสือ {filteredBooks.length} เล่ม
             {selectedCategory !== 'all' && ` ในหมวด ${selectedCategory}`}
           </div>
         </div>
-        
-        {/* Books Grid */}
+
+        {/* Books */}
         {currentBooks.length > 0 ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {currentBooks.map(book => (
@@ -153,53 +164,36 @@ const BookListPage = () => {
             <p className="text-gray-500 text-lg">ไม่พบหนังสือที่ค้นหา</p>
           </div>
         )}
-        
+
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="mt-12 flex justify-center">
             <nav className="flex items-center space-x-2">
-              <button 
+              <button
                 onClick={() => paginate(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="px-4 py-2 border border-gray-300 rounded-lg 
-                  hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
                 ก่อนหน้า
               </button>
-              
-              {[...Array(Math.min(5, totalPages))].map((_, index) => {
-                let pageNumber = index + 1;
-                if (totalPages > 5) {
-                  if (currentPage > 3) {
-                    pageNumber = currentPage - 2 + index;
-                  }
-                  if (currentPage > totalPages - 3) {
-                    pageNumber = totalPages - 4 + index;
-                  }
-                }
-                
-                if (pageNumber > 0 && pageNumber <= totalPages) {
-                  return (
-                    <button 
-                      key={pageNumber}
-                      onClick={() => paginate(pageNumber)}
-                      className={`px-4 py-2 rounded-lg ${
-                        currentPage === pageNumber
-                          ? 'bg-viridian-600 text-white' 
-                          : 'border border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      {pageNumber}
-                    </button>
-                  );
-                }
-                return null;
-              })}
-              
-              <button 
+
+              {[...Array(totalPages)].map((_, index) => (
+                <button
+                  key={index + 1}
+                  onClick={() => paginate(index + 1)}
+                  className={`px-4 py-2 rounded-lg ${currentPage === index + 1
+                    ? 'bg-viridian-600 text-white'
+                    : 'border border-gray-300 hover:bg-gray-50'}`}
+                >
+                  {index + 1}
+                </button>
+              ))}
+
+              <button
                 onClick={() => paginate(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="px-4 py-2 border border-gray-300 rounded-lg 
-                  hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
                 ถัดไป
               </button>
             </nav>
